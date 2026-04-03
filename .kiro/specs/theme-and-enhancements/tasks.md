@@ -22,8 +22,8 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
     - Add visible focus indicator styling in CSS
     - _Requirements: 1.1, 7.1, 7.2, 7.4_
 
-- [ ] 2. Implement ThemeManager module
-  - [ ] 2.1 Create ThemeManager object in app.js
+- [x] 2. Implement ThemeManager module
+  - [x] 2.1 Create ThemeManager object in app.js
     - Define currentTheme property (default: 'light')
     - Define STORAGE_KEY constant ('theme_preference')
     - Implement init() method to load saved theme and set up event listener
@@ -49,12 +49,12 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
     - **Property 3: Theme Contrast Ratios**
     - **Validates: Requirements 4.3**
 
-- [ ] 3. Integrate ThemeManager with existing components
-  - [ ] 3.1 Update AppState.init() to initialize ThemeManager
+- [x] 3. Integrate ThemeManager with existing components
+  - [x] 3.1 Update AppState.init() to initialize ThemeManager
     - Call ThemeManager.init() before other initializations
     - _Requirements: 1.6, 1.7_
   
-  - [ ] 3.2 Update ChartManager to support theme-aware colors
+  - [x] 3.2 Update ChartManager to support theme-aware colors
     - Modify ChartManager.init() to use ThemeManager.getThemeColors()
     - Add ChartManager.updateThemeColors() method
     - Call updateThemeColors() when theme changes

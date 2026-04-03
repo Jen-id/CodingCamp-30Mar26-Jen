@@ -175,6 +175,192 @@ const StorageModule = {
 };
 
 /**
+ * ThemeManager - Manages theme switching, persistence, and CSS variable updates
+ * Handles dark/light theme toggle with Local Storage persistence
+ */
+const ThemeManager = {
+  currentTheme: 'light',
+  STORAGE_KEY: 'theme_preference',
+
+  /**
+   * Initializes the theme manager
+   * Loads saved theme preference, applies it, and sets up event listener
+   */
+  init() {
+    try {
+      // Load saved theme preference from Local Storage
+      this.currentTheme = this.loadTheme();
+      
+      // Apply the loaded theme
+      this.applyTheme(this.currentTheme);
+      
+      // Set up theme toggle button event listener
+      const toggleButton = document.getElementById('theme-toggle');
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          this.toggleTheme();
+        });
+        
+        // Add keyboard accessibility (Enter and Space keys)
+        toggleButton.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.toggleTheme();
+          }
+        });
+      } else {
+        console.warn('Theme toggle button not found');
+      }
+    } catch (error) {
+      console.error('Failed to initialize ThemeManager:', error);
+      // Default to light theme on error
+      this.currentTheme = 'light';
+      this.applyTheme('light');
+    }
+  },
+
+  /**
+   * Loads theme preference from Local Storage
+   * @returns {string} Theme preference ('light' or 'dark'), defaults to 'light'
+   */
+  loadTheme() {
+    try {
+      // Check if localStorage is available
+      if (typeof localStorage === 'undefined') {
+        console.warn('Local Storage unavailable. Using default theme.');
+        return 'light';
+      }
+
+      // Retrieve theme preference from Local Storage
+      const savedTheme = localStorage.getItem(this.STORAGE_KEY);
+      
+      // Return saved theme if valid, otherwise default to light
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        return savedTheme;
+      }
+      
+      // Default to light theme if no valid preference exists
+      return 'light';
+    } catch (error) {
+      console.error('Failed to load theme preference:', error);
+      return 'light';
+    }
+  },
+
+  /**
+   * Applies the specified theme to the document
+   * Updates CSS variables, body class, and saves to Local Storage
+   * @param {string} theme - Theme to apply ('light' or 'dark')
+   */
+  applyTheme(theme) {
+    try {
+      // Validate theme parameter
+      if (theme !== 'light' && theme !== 'dark') {
+        console.error('Invalid theme:', theme);
+        return;
+      }
+
+      // Update current theme
+      this.currentTheme = theme;
+
+      // Update body class for theme
+      const body = document.body;
+      if (theme === 'dark') {
+        body.classList.add('dark-theme');
+      } else {
+        body.classList.remove('dark-theme');
+      }
+
+      // Update theme toggle button
+      this.updateToggleButton(theme);
+
+      // Update chart colors if chart exists
+      if (ChartManager && ChartManager.chartInstance) {
+        ChartManager.updateThemeColors();
+      }
+
+      // Save theme preference to Local Storage
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(this.STORAGE_KEY, theme);
+        }
+      } catch (storageError) {
+        console.warn('Failed to save theme preference:', storageError);
+        // Continue without saving - app still functions
+      }
+    } catch (error) {
+      console.error('Failed to apply theme:', error);
+    }
+  },
+
+  /**
+   * Toggles between light and dark themes
+   */
+  toggleTheme() {
+    try {
+      // Switch to opposite theme
+      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+      
+      // Apply the new theme
+      this.applyTheme(newTheme);
+    } catch (error) {
+      console.error('Failed to toggle theme:', error);
+    }
+  },
+
+  /**
+   * Updates the theme toggle button icon and ARIA label
+   * @param {string} theme - Current theme ('light' or 'dark')
+   */
+  updateToggleButton(theme) {
+    const toggleButton = document.getElementById('theme-toggle');
+    if (!toggleButton) {
+      return;
+    }
+
+    const iconElement = toggleButton.querySelector('.theme-icon');
+    
+    if (theme === 'dark') {
+      // Show sun icon for dark theme (clicking will switch to light)
+      if (iconElement) {
+        iconElement.textContent = '☀️';
+      }
+      toggleButton.setAttribute('aria-label', 'Switch to light theme');
+    } else {
+      // Show moon icon for light theme (clicking will switch to dark)
+      if (iconElement) {
+        iconElement.textContent = '🌙';
+      }
+      toggleButton.setAttribute('aria-label', 'Switch to dark theme');
+    }
+  },
+
+  /**
+   * Returns theme-appropriate colors for charts and UI elements
+   * @returns {Object} Color palette for current theme
+   */
+  getThemeColors() {
+    if (this.currentTheme === 'dark') {
+      return {
+        food: '#ff7a9a',
+        transport: '#4fb8ff',
+        fun: '#ffd966',
+        text: '#e8e8e8',
+        grid: '#404040'
+      };
+    } else {
+      return {
+        food: '#FF6384',
+        transport: '#36A2EB',
+        fun: '#FFCE56',
+        text: '#666666',
+        grid: '#e0e0e0'
+      };
+    }
+  }
+};
+
+/**
  * AppState - Application State Manager
  * Central state management module that coordinates all application operations
  */
@@ -301,6 +487,9 @@ const AppState = {
    */
   init() {
     try {
+      // Initialize ThemeManager first to apply saved theme
+      ThemeManager.init();
+      
       // Load transactions from StorageModule
       this.transactions = StorageModule.load();
       
@@ -590,11 +779,14 @@ const ChartManager = {
       // Get 2D context
       const ctx = canvasElement.getContext('2d');
 
-      // Define distinct colors for each category
+      // Get theme-appropriate colors from ThemeManager
+      const themeColors = ThemeManager.getThemeColors();
+
+      // Define distinct colors for each category using theme colors
       const categoryColors = {
-        Food: '#FF6384',      // Pink/Red
-        Transport: '#36A2EB', // Blue
-        Fun: '#FFCE56'        // Yellow
+        Food: themeColors.food,
+        Transport: themeColors.transport,
+        Fun: themeColors.fun
       };
 
       // Create Chart.js pie chart instance
@@ -620,7 +812,8 @@ const ChartManager = {
                 padding: 15,
                 font: {
                   size: 14
-                }
+                },
+                color: themeColors.text
               }
             },
             tooltip: {
@@ -791,6 +984,47 @@ const ChartManager = {
       this.chartInstance.update();
     } catch (error) {
       console.error('Failed to update chart:', error);
+    }
+  },
+
+  /**
+   * Updates chart colors based on current theme
+   * Called when theme changes to apply theme-appropriate colors
+   */
+  updateThemeColors() {
+    // Skip if in fallback mode or chart not initialized
+    if (this.fallbackMode || !this.chartInstance) {
+      return;
+    }
+
+    try {
+      // Get theme-appropriate colors from ThemeManager
+      const themeColors = ThemeManager.getThemeColors();
+
+      // Update category colors mapping
+      this.categoryColors = {
+        Food: themeColors.food,
+        Transport: themeColors.transport,
+        Fun: themeColors.fun
+      };
+
+      // Update chart options for text and grid colors
+      if (this.chartInstance.options.plugins && this.chartInstance.options.plugins.legend) {
+        this.chartInstance.options.plugins.legend.labels.color = themeColors.text;
+      }
+
+      // Update background colors for existing data
+      if (this.chartInstance.data.labels && this.chartInstance.data.labels.length > 0) {
+        const updatedColors = this.chartInstance.data.labels.map(label => {
+          return this.categoryColors[label] || themeColors.food;
+        });
+        this.chartInstance.data.datasets[0].backgroundColor = updatedColors;
+      }
+
+      // Trigger chart re-render
+      this.chartInstance.update();
+    } catch (error) {
+      console.error('Failed to update chart theme colors:', error);
     }
   },
 
