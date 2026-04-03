@@ -644,6 +644,13 @@ body.dark-theme {
     text-transform: capitalize;
 }
 
+.transaction-date {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-style: italic;
+    margin-top: 0.125rem;
+}
+
 .transaction-amount {
     font-weight: 700;
     font-size: var(--font-size-lg);

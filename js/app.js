@@ -7,6 +7,7 @@
  * @property {string} itemName - Name of the expense item
  * @property {number} amount - Expense amount (positive number)
  * @property {string} category - One of: "Food", "Transport", "Fun"
+ * @property {number} timestamp - Transaction timestamp in milliseconds
  */
 
 /**
@@ -21,18 +22,50 @@ function generateUniqueId() {
 }
 
 /**
+ * Formats a number as IDR currency with Indonesian formatting
+ * @param {number} amount - Amount to format
+ * @returns {string} Formatted currency string (e.g., "Rp 1.000.000,00")
+ */
+function formatIDR(amount) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+/**
+ * Formats a timestamp as a readable date
+ * @param {number} timestamp - Timestamp in milliseconds
+ * @returns {string} Formatted date string (e.g., "31 Des 2024, 14:30")
+ */
+function formatDate(timestamp) {
+  const date = new Date(timestamp);
+  return new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+/**
  * Creates a new Transaction object
  * @param {string} itemName - Name of the expense item
  * @param {number} amount - Expense amount (positive number)
  * @param {string} category - One of: "Food", "Transport", "Fun"
- * @returns {Transaction} New transaction object with unique ID
+ * @returns {Transaction} New transaction object with unique ID and timestamp
  */
 function createTransaction(itemName, amount, category) {
+  const timestamp = Date.now();
   return {
-    id: generateUniqueId(),
+    id: `${timestamp}-${Math.random().toString(36).substring(2, 9)}`,
     itemName: itemName,
     amount: amount,
-    category: category
+    category: category,
+    timestamp: timestamp
   };
 }
 
@@ -1265,14 +1298,22 @@ const UIRenderer = {
         categorySpan.textContent = transaction.category;
       }
 
-      // Append name and category to info container
+      // Create transaction date element
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'transaction-date';
+      // Extract timestamp from transaction ID or use timestamp property
+      const timestamp = transaction.timestamp || parseInt(transaction.id.split('-')[0]);
+      dateSpan.textContent = formatDate(timestamp);
+
+      // Append name, category, and date to info container
       infoDiv.appendChild(nameSpan);
       infoDiv.appendChild(categorySpan);
+      infoDiv.appendChild(dateSpan);
 
       // Create transaction amount element
       const amountSpan = document.createElement('span');
       amountSpan.className = 'transaction-amount';
-      amountSpan.textContent = `$${transaction.amount.toFixed(2)}`;
+      amountSpan.textContent = formatIDR(transaction.amount);
 
       // Create delete button
       const deleteButton = document.createElement('button');
@@ -1308,8 +1349,8 @@ const UIRenderer = {
       return;
     }
 
-    // Format total as currency
-    const formattedTotal = `$${total.toFixed(2)}`;
+    // Format total as IDR currency
+    const formattedTotal = formatIDR(total);
     
     // Update balance display element
     balanceElement.textContent = formattedTotal;
@@ -1686,7 +1727,7 @@ const ChartManager = {
                 label: function(context) {
                   const label = context.label || '';
                   const value = context.parsed || 0;
-                  return `${label}: ${value.toFixed(2)}`;
+                  return `${label}: ${formatIDR(value)}`;
                 }
               }
             }
@@ -1780,7 +1821,7 @@ const ChartManager = {
         colorBox.style.borderRadius = '3px';
 
         const text = document.createElement('span');
-        text.textContent = `${category}: ${total.toFixed(2)}`;
+        text.textContent = `${category}: ${formatIDR(total)}`;
         text.style.fontWeight = 'bold';
 
         categoryDiv.appendChild(colorBox);
