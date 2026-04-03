@@ -123,22 +123,58 @@ const StorageModule = {
         return [];
       }
 
+      // Get all valid categories (default + custom) for validation
+      const validCategories = ['Food', 'Transport', 'Fun'];
+      
+      // Load custom categories to check for orphaned categories
+      let customCategories = [];
+      try {
+        const customCategoriesData = localStorage.getItem('custom_categories');
+        if (customCategoriesData) {
+          customCategories = JSON.parse(customCategoriesData);
+          if (Array.isArray(customCategories)) {
+            validCategories.push(...customCategories);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load custom categories for validation');
+      }
+
+      // Track orphaned categories for warning
+      const orphanedCategories = new Set();
+
       // Validate each transaction has required properties
       const isValid = transactions.every(transaction => {
-        return (
+        const hasValidStructure = (
           transaction &&
           typeof transaction === 'object' &&
           typeof transaction.id === 'string' &&
           typeof transaction.itemName === 'string' &&
           typeof transaction.amount === 'number' &&
-          typeof transaction.category === 'string' &&
-          ['Food', 'Transport', 'Fun'].includes(transaction.category)
+          typeof transaction.category === 'string'
         );
+
+        if (!hasValidStructure) {
+          return false;
+        }
+
+        // Check if category is orphaned (deleted custom category)
+        if (!validCategories.includes(transaction.category)) {
+          orphanedCategories.add(transaction.category);
+        }
+
+        return true;
       });
 
       if (!isValid) {
         console.error('Corrupted data detected: invalid transaction structure, starting fresh');
         return [];
+      }
+
+      // Log warning if orphaned categories detected (Task 13.4)
+      if (orphanedCategories.size > 0) {
+        const orphanedList = Array.from(orphanedCategories).join(', ');
+        console.warn(`Found transactions with deleted categories: ${orphanedList}`);
       }
 
       return transactions;
@@ -253,6 +289,9 @@ const ThemeManager = {
    * @param {string} theme - Theme to apply ('light' or 'dark')
    */
   applyTheme(theme) {
+    // Store previous theme for revert on error
+    const previousTheme = this.currentTheme;
+    
     try {
       // Validate theme parameter
       if (theme !== 'light' && theme !== 'dark') {
@@ -289,7 +328,23 @@ const ThemeManager = {
         // Continue without saving - app still functions
       }
     } catch (error) {
+      // Log error to console
       console.error('Failed to apply theme:', error);
+      
+      // Revert to previous theme
+      this.currentTheme = previousTheme;
+      const body = document.body;
+      if (previousTheme === 'dark') {
+        body.classList.add('dark-theme');
+      } else {
+        body.classList.remove('dark-theme');
+      }
+      this.updateToggleButton(previousTheme);
+      
+      // Display user-friendly error message
+      if (typeof UIRenderer !== 'undefined' && UIRenderer.showError) {
+        UIRenderer.showError('Theme change failed. Please try again.');
+      }
     }
   },
 
@@ -486,30 +541,30 @@ const CategoryManager = {
    * @returns {Object} Validation result with {valid: boolean, error: string}
    */
   validateCategoryName(name) {
-    // Check non-empty
+    // Check non-empty - specific error message
     if (!name || name.trim() === '') {
       return {
         valid: false,
-        error: 'Category name cannot be empty'
+        error: 'Category name cannot be empty. Please enter a name.'
       };
     }
 
     const trimmedName = name.trim();
 
-    // Check max length (20 characters)
+    // Check max length (20 characters) - specific error message
     if (trimmedName.length > 20) {
       return {
         valid: false,
-        error: 'Category name must be 20 characters or less'
+        error: `Category name must be 20 characters or less (currently ${trimmedName.length} characters).`
       };
     }
 
-    // Check alphanumeric + spaces only
+    // Check alphanumeric + spaces only - specific error message
     const alphanumericRegex = /^[a-zA-Z0-9\s]+$/;
     if (!alphanumericRegex.test(trimmedName)) {
       return {
         valid: false,
-        error: 'Category name can only contain letters, numbers, and spaces'
+        error: 'Category name can only contain letters, numbers, and spaces. Special characters are not allowed.'
       };
     }
 
@@ -538,15 +593,15 @@ const CategoryManager = {
 
       const trimmedName = name.trim();
 
-      // Check for maximum limit
+      // Check for maximum limit - show specific message
       if (this.customCategories.length >= this.MAX_CUSTOM_CATEGORIES) {
         return {
           success: false,
-          error: `Maximum of ${this.MAX_CUSTOM_CATEGORIES} custom categories reached`
+          error: `Maximum of ${this.MAX_CUSTOM_CATEGORIES} custom categories reached. Delete a category to add a new one.`
         };
       }
 
-      // Check for duplicates (case-insensitive)
+      // Check for duplicates (case-insensitive) - specific error message
       const allCategories = this.getAllCategories();
       const isDuplicate = allCategories.some(
         category => category.toLowerCase() === trimmedName.toLowerCase()
@@ -555,21 +610,31 @@ const CategoryManager = {
       if (isDuplicate) {
         return {
           success: false,
-          error: 'This category already exists'
+          error: `Category "${trimmedName}" already exists. Please choose a different name.`
         };
       }
 
       // Add to customCategories array
       this.customCategories.push(trimmedName);
 
-      // Save to Local Storage
+      // Save to Local Storage - handle storage errors gracefully
       try {
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.customCategories));
         }
       } catch (storageError) {
-        console.warn('Failed to save custom categories:', storageError);
-        // Continue without saving - app still functions
+        console.error('Failed to save custom categories:', storageError);
+        // Show storage-specific error message
+        if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
+          return {
+            success: false,
+            error: 'Storage limit reached. Cannot save new category. Please delete some transactions or categories.'
+          };
+        }
+        // For other storage errors, continue but warn user
+        if (typeof UIRenderer !== 'undefined' && UIRenderer.showWarning) {
+          UIRenderer.showWarning('Category added but may not persist. Storage unavailable.');
+        }
       }
 
       return {
@@ -580,7 +645,7 @@ const CategoryManager = {
       console.error('Failed to add custom category:', error);
       return {
         success: false,
-        error: 'Failed to add category'
+        error: 'Failed to add category. Please try again.'
       };
     }
   },
@@ -592,14 +657,14 @@ const CategoryManager = {
    */
   deleteCategory(name) {
     try {
-      // Check if category has associated transactions
+      // Check if category has associated transactions - show specific warning
       if (this.categoryHasTransactions(name)) {
         const transactionCount = AppState.transactions.filter(
           t => t.category === name
         ).length;
         return {
           success: false,
-          error: `Cannot delete category '${name}' because it has ${transactionCount} transaction(s). Delete those transactions first.`
+          error: `Cannot delete category "${name}" because it has ${transactionCount} transaction(s). Please delete those transactions first.`
         };
       }
 
@@ -609,21 +674,31 @@ const CategoryManager = {
       if (index === -1) {
         return {
           success: false,
-          error: 'Category not found'
+          error: `Category "${name}" not found.`
         };
       }
 
       // Remove from customCategories array
       this.customCategories.splice(index, 1);
 
-      // Save to Local Storage
+      // Save to Local Storage - handle storage errors gracefully
       try {
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.customCategories));
         }
       } catch (storageError) {
-        console.warn('Failed to save custom categories:', storageError);
-        // Continue without saving - app still functions
+        console.error('Failed to save custom categories:', storageError);
+        // Show storage-specific error message
+        if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
+          return {
+            success: false,
+            error: 'Storage error. Category deletion may not persist.'
+          };
+        }
+        // For other storage errors, continue but warn user
+        if (typeof UIRenderer !== 'undefined' && UIRenderer.showWarning) {
+          UIRenderer.showWarning('Category deleted but change may not persist. Storage unavailable.');
+        }
       }
 
       return {
@@ -634,7 +709,7 @@ const CategoryManager = {
       console.error('Failed to delete custom category:', error);
       return {
         success: false,
-        error: 'Failed to delete category'
+        error: 'Failed to delete category. Please try again.'
       };
     }
   },
@@ -659,6 +734,256 @@ const CategoryManager = {
 };
 
 /**
+ * SortManager - Manages transaction sorting with multiple criteria and persistence
+ * Handles sort preference loading, saving, and transaction sorting operations
+ */
+const SortManager = {
+  currentSort: {
+    field: 'date',      // 'date', 'amount', or 'category'
+    order: 'desc'       // 'asc' or 'desc'
+  },
+  STORAGE_KEY: 'sort_preference',
+
+  /**
+   * Initializes the sort manager
+   * Loads saved sort preference and renders sort controls
+   */
+  init() {
+    try {
+      // Load sort preference from Local Storage
+      this.currentSort = this.loadSortPreference();
+      
+      // Render sort controls UI
+      UIRenderer.renderSortControls();
+      
+      // Set up sort control event listeners
+      this.setupEventListeners();
+    } catch (error) {
+      console.error('Failed to initialize SortManager:', error);
+      // Default to date descending on error
+      this.currentSort = { field: 'date', order: 'desc' };
+    }
+  },
+
+  /**
+   * Sets up event listeners for sort controls
+   */
+  setupEventListeners() {
+    // Set up sort field dropdown listener
+    const sortFieldSelect = document.getElementById('sort-field');
+    if (sortFieldSelect) {
+      sortFieldSelect.addEventListener('change', (event) => {
+        const newField = event.target.value;
+        this.setSortPreference(newField, this.currentSort.order);
+        // Trigger re-render
+        UIRenderer.renderTransactionList(AppState.getSortedTransactions());
+      });
+    }
+
+    // Set up sort order toggle button listener
+    const sortOrderButton = document.getElementById('sort-order-toggle');
+    if (sortOrderButton) {
+      sortOrderButton.addEventListener('click', () => {
+        const newOrder = this.currentSort.order === 'asc' ? 'desc' : 'asc';
+        this.setSortPreference(this.currentSort.field, newOrder);
+        // Update button display
+        UIRenderer.renderSortControls();
+        // Trigger re-render
+        UIRenderer.renderTransactionList(AppState.getSortedTransactions());
+      });
+    }
+  },
+
+  /**
+   * Loads sort preference from Local Storage
+   * @returns {Object} Sort preference with field and order, or default if not found
+   */
+  loadSortPreference() {
+    try {
+      // Check if localStorage is available
+      if (typeof localStorage === 'undefined') {
+        console.warn('Local Storage unavailable. Using default sort preference.');
+        return { field: 'date', order: 'desc' };
+      }
+
+      // Retrieve sort preference from Local Storage
+      const jsonData = localStorage.getItem(this.STORAGE_KEY);
+      
+      // Return default if no data exists
+      if (jsonData === null) {
+        return { field: 'date', order: 'desc' };
+      }
+
+      // Parse JSON
+      const sortPreference = JSON.parse(jsonData);
+
+      // Validate structure
+      if (
+        !sortPreference ||
+        typeof sortPreference !== 'object' ||
+        !sortPreference.field ||
+        !sortPreference.order
+      ) {
+        console.warn('Invalid sort preference structure, using default');
+        return { field: 'date', order: 'desc' };
+      }
+
+      // Validate field value
+      const validFields = ['date', 'amount', 'category'];
+      if (!validFields.includes(sortPreference.field)) {
+        console.warn('Invalid sort field, using default');
+        return { field: 'date', order: 'desc' };
+      }
+
+      // Validate order value
+      const validOrders = ['asc', 'desc'];
+      if (!validOrders.includes(sortPreference.order)) {
+        console.warn('Invalid sort order, using default');
+        return { field: 'date', order: 'desc' };
+      }
+
+      return sortPreference;
+    } catch (error) {
+      // Handle JSON parsing errors
+      if (error instanceof SyntaxError) {
+        console.error('Corrupted sort preference data: invalid JSON, using default');
+        return { field: 'date', order: 'desc' };
+      }
+
+      // Handle other errors
+      console.error('Failed to load sort preference from Local Storage:', error);
+      return { field: 'date', order: 'desc' };
+    }
+  },
+
+  /**
+   * Sets the sort preference and persists to Local Storage
+   * @param {string} field - Sort field ('date', 'amount', or 'category')
+   * @param {string} order - Sort order ('asc' or 'desc')
+   */
+  setSortPreference(field, order) {
+    try {
+      // Validate field
+      const validFields = ['date', 'amount', 'category'];
+      if (!validFields.includes(field)) {
+        console.error('Invalid sort field:', field);
+        return;
+      }
+
+      // Validate order
+      const validOrders = ['asc', 'desc'];
+      if (!validOrders.includes(order)) {
+        console.error('Invalid sort order:', order);
+        return;
+      }
+
+      // Update current sort preference
+      this.currentSort = { field, order };
+
+      // Save to Local Storage
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.currentSort));
+        }
+      } catch (storageError) {
+        console.warn('Failed to save sort preference:', storageError);
+        // Continue without saving - app still functions
+      }
+    } catch (error) {
+      console.error('Failed to set sort preference:', error);
+    }
+  },
+
+  /**
+   * Sorts transactions based on current sort preference
+   * @param {Transaction[]} transactions - Array of transactions to sort
+   * @returns {Transaction[]} Sorted array (does not mutate original)
+   */
+  sortTransactions(transactions) {
+    try {
+      // Clone transactions array to avoid mutation
+      const sortedTransactions = [...transactions];
+
+      // Apply sort based on current field
+      switch (this.currentSort.field) {
+        case 'amount':
+          return this.sortByAmount(sortedTransactions, this.currentSort.order);
+        case 'category':
+          return this.sortByCategory(sortedTransactions, this.currentSort.order);
+        case 'date':
+        default:
+          return this.sortByDate(sortedTransactions, this.currentSort.order);
+      }
+    } catch (error) {
+      console.error('Failed to sort transactions:', error);
+      // Return original array on error
+      return transactions;
+    }
+  },
+
+  /**
+   * Sorts transactions by amount
+   * @param {Transaction[]} transactions - Array of transactions to sort
+   * @param {string} order - Sort order ('asc' or 'desc')
+   * @returns {Transaction[]} Sorted array
+   */
+  sortByAmount(transactions, order) {
+    return transactions.sort((a, b) => {
+      if (order === 'desc') {
+        // Descending: highest first
+        return b.amount - a.amount;
+      } else {
+        // Ascending: lowest first
+        return a.amount - b.amount;
+      }
+    });
+  },
+
+  /**
+   * Sorts transactions by category name
+   * @param {Transaction[]} transactions - Array of transactions to sort
+   * @param {string} order - Sort order ('asc' or 'desc')
+   * @returns {Transaction[]} Sorted array
+   */
+  sortByCategory(transactions, order) {
+    return transactions.sort((a, b) => {
+      const categoryA = a.category.toLowerCase();
+      const categoryB = b.category.toLowerCase();
+
+      if (order === 'asc') {
+        // Ascending: A-Z
+        return categoryA.localeCompare(categoryB);
+      } else {
+        // Descending: Z-A
+        return categoryB.localeCompare(categoryA);
+      }
+    });
+  },
+
+  /**
+   * Sorts transactions by date (using transaction ID which contains timestamp)
+   * @param {Transaction[]} transactions - Array of transactions to sort
+   * @param {string} order - Sort order ('asc' or 'desc')
+   * @returns {Transaction[]} Sorted array
+   */
+  sortByDate(transactions, order) {
+    return transactions.sort((a, b) => {
+      // Extract timestamp from transaction ID (format: timestamp-randomstring)
+      const timestampA = parseInt(a.id.split('-')[0]);
+      const timestampB = parseInt(b.id.split('-')[0]);
+
+      if (order === 'desc') {
+        // Descending: newest first
+        return timestampB - timestampA;
+      } else {
+        // Ascending: oldest first
+        return timestampA - timestampB;
+      }
+    });
+  }
+};
+
+/**
  * AppState - Application State Manager
  * Central state management module that coordinates all application operations
  */
@@ -666,6 +991,7 @@ const AppState = {
   transactions: [],
   chartInstance: null,
   customCategories: [],
+  sortPreference: {},
 
   /**
    * Adds a new transaction to the application state
@@ -704,8 +1030,8 @@ const AppState = {
       console.warn('Transaction added but not persisted to storage');
     }
     
-    // Trigger UI updates
-    UIRenderer.renderTransactionList(this.transactions);
+    // Trigger UI updates with sorted transactions
+    UIRenderer.renderTransactionList(this.getSortedTransactions());
     UIRenderer.updateTotalBalance(this.calculateTotal());
     
     // Update chart with new category totals
@@ -742,8 +1068,8 @@ const AppState = {
       console.warn('Transaction deleted but change not persisted to storage');
     }
     
-    // Trigger UI updates
-    UIRenderer.renderTransactionList(this.transactions);
+    // Trigger UI updates with sorted transactions
+    UIRenderer.renderTransactionList(this.getSortedTransactions());
     UIRenderer.updateTotalBalance(this.calculateTotal());
     
     // Update chart with new category totals
@@ -786,6 +1112,14 @@ const AppState = {
   },
 
   /**
+   * Gets sorted transactions based on current sort preference
+   * @returns {Transaction[]} Sorted array of transactions
+   */
+  getSortedTransactions() {
+    return SortManager.sortTransactions(this.transactions);
+  },
+
+  /**
    * Initializes the application
    * Loads data from storage, sets up UI, and wires event listeners
    */
@@ -799,6 +1133,12 @@ const AppState = {
       
       // Store reference to custom categories in AppState
       this.customCategories = CategoryManager.customCategories;
+      
+      // Initialize SortManager to load sort preference
+      SortManager.init();
+      
+      // Store reference to sort preference in AppState
+      this.sortPreference = SortManager.currentSort;
       
       // Load transactions from StorageModule
       this.transactions = StorageModule.load();
@@ -817,8 +1157,8 @@ const AppState = {
         ChartManager.showFallback();
       }
       
-      // Render initial transaction list
-      UIRenderer.renderTransactionList(this.transactions);
+      // Render initial transaction list with sorted transactions
+      UIRenderer.renderTransactionList(this.getSortedTransactions());
       
       // Render category options in form dropdown
       UIRenderer.renderCategoryOptions();
@@ -887,11 +1227,21 @@ const UIRenderer = {
 
     // Create DOM elements for each transaction
     transactions.forEach(transaction => {
+      // Check if category is orphaned (deleted custom category)
+      const validCategories = CategoryManager.getAllCategories();
+      const isOrphaned = !validCategories.includes(transaction.category);
+      
       // Create list item
       const listItem = document.createElement('li');
       listItem.className = 'transaction-item';
       listItem.setAttribute('data-category', transaction.category);
       listItem.setAttribute('data-id', transaction.id);
+      
+      // Add visual indicator for orphaned categories
+      if (isOrphaned) {
+        listItem.style.opacity = '0.7';
+        listItem.style.borderLeftColor = '#999';
+      }
 
       // Create transaction info container
       const infoDiv = document.createElement('div');
@@ -905,7 +1255,15 @@ const UIRenderer = {
       // Create transaction category element
       const categorySpan = document.createElement('span');
       categorySpan.className = 'transaction-category';
-      categorySpan.textContent = transaction.category;
+      
+      // Display orphaned category with "(inactive)" suffix
+      if (isOrphaned) {
+        categorySpan.textContent = `${transaction.category} (inactive)`;
+        categorySpan.style.fontStyle = 'italic';
+        categorySpan.style.color = '#999';
+      } else {
+        categorySpan.textContent = transaction.category;
+      }
 
       // Append name and category to info container
       infoDiv.appendChild(nameSpan);
@@ -1197,6 +1555,58 @@ const UIRenderer = {
       }
     } else {
       addButton.disabled = false;
+    }
+  },
+
+  /**
+   * Renders the sort controls with current sort preference
+   * Updates the sort field dropdown and order toggle button
+   */
+  renderSortControls() {
+    // Get sort field select element
+    const sortFieldSelect = document.getElementById('sort-field');
+    
+    if (!sortFieldSelect) {
+      console.error('Sort field select element not found');
+      return;
+    }
+
+    // Get sort order toggle button
+    const sortOrderButton = document.getElementById('sort-order-toggle');
+    
+    if (!sortOrderButton) {
+      console.error('Sort order toggle button not found');
+      return;
+    }
+
+    // Get current sort preference from SortManager
+    const currentSort = SortManager.currentSort;
+
+    // Update sort field dropdown to reflect current selection
+    sortFieldSelect.value = currentSort.field;
+
+    // Update sort order button
+    const iconElement = sortOrderButton.querySelector('.sort-order-icon');
+    const textElement = sortOrderButton.querySelector('.sort-order-text');
+
+    if (currentSort.order === 'asc') {
+      // Ascending order
+      if (iconElement) {
+        iconElement.textContent = '↑';
+      }
+      if (textElement) {
+        textElement.textContent = 'Ascending';
+      }
+      sortOrderButton.setAttribute('aria-label', 'Sort order: Ascending');
+    } else {
+      // Descending order
+      if (iconElement) {
+        iconElement.textContent = '↓';
+      }
+      if (textElement) {
+        textElement.textContent = 'Descending';
+      }
+      sortOrderButton.setAttribute('aria-label', 'Sort order: Descending');
     }
   }
 };

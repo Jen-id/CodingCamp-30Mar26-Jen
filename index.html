@@ -105,6 +105,24 @@
         <!-- Transaction List -->
         <section class="transactions-section" aria-labelledby="transactions-heading">
             <h2 id="transactions-heading">Transaction History</h2>
+            
+            <!-- Sort Controls -->
+            <div class="sort-controls" role="group" aria-label="Transaction sorting options">
+                <div class="sort-field-group">
+                    <label for="sort-field">Sort by</label>
+                    <select id="sort-field" name="sortField" aria-label="Sort field">
+                        <option value="date">Date</option>
+                        <option value="amount">Amount</option>
+                        <option value="category">Category</option>
+                    </select>
+                </div>
+                
+                <button type="button" id="sort-order-toggle" class="btn-sort-order" aria-label="Sort order: Descending">
+                    <span class="sort-order-icon">↓</span>
+                    <span class="sort-order-text">Descending</span>
+                </button>
+            </div>
+
             <ul id="transaction-list" class="transaction-list" aria-live="polite">
                 <!-- Transactions will be dynamically inserted here -->
             </ul>

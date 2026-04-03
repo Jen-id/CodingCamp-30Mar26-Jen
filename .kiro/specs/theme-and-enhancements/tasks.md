@@ -173,16 +173,16 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
 - [ ] 8. Checkpoint - Ensure custom category management works correctly
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Implement transaction sorting UI
-  - [ ] 9.1 Add sort controls to HTML
+- [x] 9. Implement transaction sorting UI
+  - [x] 9.1 Add sort controls to HTML
     - Add sort controls section above transaction list
     - Add dropdown for sort field (Date, Amount, Category)
     - Add toggle button for sort order (Ascending/Descending)
     - Style sort controls in CSS
     - _Requirements: 3.1, 3.4_
 
-- [ ] 10. Implement SortManager module
-  - [ ] 10.1 Create SortManager object in app.js
+- [x] 10. Implement SortManager module
+  - [x] 10.1 Create SortManager object in app.js
     - Define currentSort property with field and order
     - Define STORAGE_KEY constant ('sort_preference')
     - Implement init() method to load preference and render controls
@@ -206,15 +206,15 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
     - **Property 17: Sort Preference Round-Trip**
     - **Validates: Requirements 3.6, 3.7**
 
-- [ ] 11. Integrate SortManager with existing components
-  - [ ] 11.1 Update AppState to support sorting
+- [-] 11. Integrate SortManager with existing components
+  - [x] 11.1 Update AppState to support sorting
     - Add sortPreference property to AppState
     - Update AppState.init() to initialize SortManager
     - Add AppState.getSortedTransactions() method
     - Update transaction operations to respect current sort
     - _Requirements: 3.5, 3.7, 3.8_
   
-  - [ ] 11.2 Update UIRenderer to use sorted transactions
+  - [x] 11.2 Update UIRenderer to use sorted transactions
     - Modify UIRenderer.renderTransactionList() to use sorted array
     - Add UIRenderer.renderSortControls() method
     - Update sort controls when preference changes
@@ -236,35 +236,35 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
 - [ ] 12. Checkpoint - Ensure transaction sorting works correctly
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Implement error handling for new features
-  - [ ] 13.1 Add theme switching error handling
+- [x] 13. Implement error handling for new features
+  - [x] 13.1 Add theme switching error handling
     - Wrap theme application in try-catch
     - Revert to previous theme on error
     - Display user-friendly error message
     - Log errors to console
   
-  - [ ] 13.2 Add custom category error handling
+  - [x] 13.2 Add custom category error handling
     - Display specific validation error messages
     - Show warning when attempting to delete category with transactions
     - Handle storage errors gracefully
     - Show max limit message when at 10 categories
     - _Requirements: 2.10, 8.3_
   
-  - [ ] 13.3 Add sort preference error handling
+  - [x] 13.3 Add sort preference error handling
     - Validate sort preference structure on load
     - Use default sort if invalid preference found
     - Handle corrupted sort data gracefully
     - _Requirements: 3.8_
   
-  - [ ] 13.4 Add orphaned category handling
+  - [x] 13.4 Add orphaned category handling
     - Detect transactions with deleted custom categories on load
     - Display orphaned category names with "(inactive)" suffix
     - Add visual indicator for orphaned categories
     - Log warning to console
     - _Requirements: 5.3, 5.4_
 
-- [ ] 14. Final integration and wiring
-  - [ ] 14.1 Update AppState.init() with complete initialization sequence
+- [x] 14. Final integration and wiring
+  - [x] 14.1 Update AppState.init() with complete initialization sequence
     - Initialize ThemeManager first
     - Initialize CategoryManager second
     - Initialize SortManager third
@@ -273,7 +273,7 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
     - Render all UI components in correct order
     - Set up all event listeners
   
-  - [ ] 14.2 Ensure all Local Storage operations are coordinated
+  - [x] 14.2 Ensure all Local Storage operations are coordinated
     - Verify theme preference saves and loads correctly
     - Verify custom categories save and load correctly
     - Verify sort preference saves and loads correctly
@@ -288,7 +288,7 @@ This plan implements three enhancements to the existing Expense & Budget Visuali
     - Test adding transaction with custom category then deleting category
     - Test sorting after adding/deleting transactions
 
-- [ ] 15. Final checkpoint - Ensure all features work together
+- [x] 15. Final checkpoint - Ensure all features work together
   - Ensure all tests pass, ask the user if questions arise.
   - Verify theme changes complete within 300ms
   - Verify sort operations complete within 200ms for up to 1000 transactions
