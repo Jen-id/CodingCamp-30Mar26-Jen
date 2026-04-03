@@ -361,18 +361,317 @@ const ThemeManager = {
 };
 
 /**
+ * CategoryManager - Manages custom categories with validation and persistence
+ * Handles custom category creation, deletion, validation, and Local Storage operations
+ */
+const CategoryManager = {
+  customCategories: [],
+  MAX_CUSTOM_CATEGORIES: 10,
+  STORAGE_KEY: 'custom_categories',
+
+  /**
+   * Initializes the category manager
+   * Loads saved custom categories and renders UI
+   */
+  init() {
+    try {
+      // Load custom categories from Local Storage
+      this.customCategories = this.loadCategories();
+      
+      // Render category management UI
+      if (typeof UIRenderer !== 'undefined' && UIRenderer.renderCategoryManagement) {
+        UIRenderer.renderCategoryManagement();
+        UIRenderer.renderCategoryOptions();
+      }
+      
+      // Set up add category button event listener
+      const addButton = document.getElementById('add-category-btn');
+      const inputField = document.getElementById('new-category-name');
+      
+      if (addButton && inputField) {
+        addButton.addEventListener('click', () => {
+          const categoryName = inputField.value;
+          const result = this.addCategory(categoryName);
+          
+          if (result.success) {
+            // Clear input field
+            inputField.value = '';
+            // Update UI
+            if (typeof UIRenderer !== 'undefined') {
+              UIRenderer.renderCategoryManagement();
+              UIRenderer.renderCategoryOptions();
+              UIRenderer.hideError();
+            }
+            // Update chart
+            if (typeof ChartManager !== 'undefined' && typeof AppState !== 'undefined') {
+              ChartManager.update(AppState.getCategoryTotals());
+            }
+          } else {
+            // Show error message
+            if (typeof UIRenderer !== 'undefined') {
+              UIRenderer.showError(result.error);
+            }
+          }
+        });
+        
+        // Add Enter key support for input field
+        inputField.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            addButton.click();
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to initialize CategoryManager:', error);
+      // Default to empty custom categories on error
+      this.customCategories = [];
+    }
+  },
+
+  /**
+   * Loads custom categories from Local Storage
+   * @returns {string[]} Array of custom category names, or empty array if none exist
+   */
+  loadCategories() {
+    try {
+      // Check if localStorage is available
+      if (typeof localStorage === 'undefined') {
+        console.warn('Local Storage unavailable. Custom categories will not persist.');
+        return [];
+      }
+
+      // Retrieve custom categories from Local Storage
+      const jsonData = localStorage.getItem(this.STORAGE_KEY);
+      
+      // Return empty array if no data exists
+      if (jsonData === null) {
+        return [];
+      }
+
+      // Parse JSON
+      const categories = JSON.parse(jsonData);
+
+      // Validate structure
+      if (!Array.isArray(categories)) {
+        console.error('Corrupted custom categories data: expected array, starting fresh');
+        return [];
+      }
+
+      // Validate each category is a string
+      const isValid = categories.every(category => typeof category === 'string');
+
+      if (!isValid) {
+        console.error('Corrupted custom categories data: invalid structure, starting fresh');
+        return [];
+      }
+
+      return categories;
+    } catch (error) {
+      // Handle JSON parsing errors
+      if (error instanceof SyntaxError) {
+        console.error('Corrupted custom categories data: invalid JSON, starting fresh');
+        return [];
+      }
+
+      // Handle other errors
+      console.error('Failed to load custom categories from Local Storage:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Validates a category name
+   * @param {string} name - Category name to validate
+   * @returns {Object} Validation result with {valid: boolean, error: string}
+   */
+  validateCategoryName(name) {
+    // Check non-empty
+    if (!name || name.trim() === '') {
+      return {
+        valid: false,
+        error: 'Category name cannot be empty'
+      };
+    }
+
+    const trimmedName = name.trim();
+
+    // Check max length (20 characters)
+    if (trimmedName.length > 20) {
+      return {
+        valid: false,
+        error: 'Category name must be 20 characters or less'
+      };
+    }
+
+    // Check alphanumeric + spaces only
+    const alphanumericRegex = /^[a-zA-Z0-9\s]+$/;
+    if (!alphanumericRegex.test(trimmedName)) {
+      return {
+        valid: false,
+        error: 'Category name can only contain letters, numbers, and spaces'
+      };
+    }
+
+    // All validations passed
+    return {
+      valid: true,
+      error: ''
+    };
+  },
+
+  /**
+   * Adds a new custom category
+   * @param {string} name - Category name to add
+   * @returns {Object} Result with {success: boolean, error: string}
+   */
+  addCategory(name) {
+    try {
+      // Validate category name
+      const validationResult = this.validateCategoryName(name);
+      if (!validationResult.valid) {
+        return {
+          success: false,
+          error: validationResult.error
+        };
+      }
+
+      const trimmedName = name.trim();
+
+      // Check for maximum limit
+      if (this.customCategories.length >= this.MAX_CUSTOM_CATEGORIES) {
+        return {
+          success: false,
+          error: `Maximum of ${this.MAX_CUSTOM_CATEGORIES} custom categories reached`
+        };
+      }
+
+      // Check for duplicates (case-insensitive)
+      const allCategories = this.getAllCategories();
+      const isDuplicate = allCategories.some(
+        category => category.toLowerCase() === trimmedName.toLowerCase()
+      );
+
+      if (isDuplicate) {
+        return {
+          success: false,
+          error: 'This category already exists'
+        };
+      }
+
+      // Add to customCategories array
+      this.customCategories.push(trimmedName);
+
+      // Save to Local Storage
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.customCategories));
+        }
+      } catch (storageError) {
+        console.warn('Failed to save custom categories:', storageError);
+        // Continue without saving - app still functions
+      }
+
+      return {
+        success: true,
+        error: ''
+      };
+    } catch (error) {
+      console.error('Failed to add custom category:', error);
+      return {
+        success: false,
+        error: 'Failed to add category'
+      };
+    }
+  },
+
+  /**
+   * Deletes a custom category
+   * @param {string} name - Category name to delete
+   * @returns {Object} Result with {success: boolean, error: string}
+   */
+  deleteCategory(name) {
+    try {
+      // Check if category has associated transactions
+      if (this.categoryHasTransactions(name)) {
+        const transactionCount = AppState.transactions.filter(
+          t => t.category === name
+        ).length;
+        return {
+          success: false,
+          error: `Cannot delete category '${name}' because it has ${transactionCount} transaction(s). Delete those transactions first.`
+        };
+      }
+
+      // Find category index (case-sensitive)
+      const index = this.customCategories.indexOf(name);
+
+      if (index === -1) {
+        return {
+          success: false,
+          error: 'Category not found'
+        };
+      }
+
+      // Remove from customCategories array
+      this.customCategories.splice(index, 1);
+
+      // Save to Local Storage
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.customCategories));
+        }
+      } catch (storageError) {
+        console.warn('Failed to save custom categories:', storageError);
+        // Continue without saving - app still functions
+      }
+
+      return {
+        success: true,
+        error: ''
+      };
+    } catch (error) {
+      console.error('Failed to delete custom category:', error);
+      return {
+        success: false,
+        error: 'Failed to delete category'
+      };
+    }
+  },
+
+  /**
+   * Returns all categories (default + custom)
+   * @returns {string[]} Array of all category names
+   */
+  getAllCategories() {
+    const defaultCategories = ['Food', 'Transport', 'Fun'];
+    return [...defaultCategories, ...this.customCategories];
+  },
+
+  /**
+   * Checks if a category has associated transactions
+   * @param {string} name - Category name to check
+   * @returns {boolean} True if category has transactions, false otherwise
+   */
+  categoryHasTransactions(name) {
+    return AppState.transactions.some(transaction => transaction.category === name);
+  }
+};
+
+/**
  * AppState - Application State Manager
  * Central state management module that coordinates all application operations
  */
 const AppState = {
   transactions: [],
   chartInstance: null,
+  customCategories: [],
 
   /**
    * Adds a new transaction to the application state
    * @param {string} itemName - Name of the expense item
    * @param {number} amount - Expense amount (positive number)
-   * @param {string} category - One of: "Food", "Transport", "Fun"
+   * @param {string} category - Category name (default or custom)
    * @returns {boolean} True if transaction was added successfully, false otherwise
    */
   addTransaction(itemName, amount, category) {
@@ -385,7 +684,9 @@ const AppState = {
       return false;
     }
     
-    if (!['Food', 'Transport', 'Fun'].includes(category)) {
+    // Validate against all categories (default + custom)
+    const allCategories = CategoryManager.getAllCategories();
+    if (!allCategories.includes(category)) {
       return false;
     }
 
@@ -463,15 +764,18 @@ const AppState = {
 
   /**
    * Calculates spending totals for each category
-   * @returns {Object} Object with category totals {Food: number, Transport: number, Fun: number}
+   * @returns {Object} Object with category totals for all categories (default + custom)
    */
   getCategoryTotals() {
-    const totals = {
-      Food: 0,
-      Transport: 0,
-      Fun: 0
-    };
+    // Initialize totals for all categories (default + custom)
+    const allCategories = CategoryManager.getAllCategories();
+    const totals = {};
     
+    allCategories.forEach(category => {
+      totals[category] = 0;
+    });
+    
+    // Sum up transaction amounts by category
     this.transactions.forEach(transaction => {
       if (totals.hasOwnProperty(transaction.category)) {
         totals[transaction.category] += transaction.amount;
@@ -489,6 +793,12 @@ const AppState = {
     try {
       // Initialize ThemeManager first to apply saved theme
       ThemeManager.init();
+      
+      // Initialize CategoryManager to load custom categories
+      CategoryManager.init();
+      
+      // Store reference to custom categories in AppState
+      this.customCategories = CategoryManager.customCategories;
       
       // Load transactions from StorageModule
       this.transactions = StorageModule.load();
@@ -509,6 +819,12 @@ const AppState = {
       
       // Render initial transaction list
       UIRenderer.renderTransactionList(this.transactions);
+      
+      // Render category options in form dropdown
+      UIRenderer.renderCategoryOptions();
+      
+      // Render category management UI
+      UIRenderer.renderCategoryManagement();
       
       // Update total balance display
       UIRenderer.updateTotalBalance(this.calculateTotal());
@@ -743,6 +1059,145 @@ const UIRenderer = {
       clearTimeout(this.errorTimeout);
       this.errorTimeout = null;
     }
+  },
+
+  /**
+   * Renders category options in the form dropdown
+   * Updates the dropdown with default + custom categories
+   */
+  renderCategoryOptions() {
+    // Get category select element
+    const selectElement = document.getElementById('category');
+    
+    if (!selectElement) {
+      console.error('Category select element not found');
+      return;
+    }
+
+    // Store current selection
+    const currentValue = selectElement.value;
+
+    // Clear existing options except the first placeholder
+    selectElement.innerHTML = '<option value="">Select a category</option>';
+
+    // Get all categories from CategoryManager
+    const allCategories = CategoryManager.getAllCategories();
+
+    // Add options for each category
+    allCategories.forEach(category => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      selectElement.appendChild(option);
+    });
+
+    // Restore previous selection if it still exists
+    if (currentValue && allCategories.includes(currentValue)) {
+      selectElement.value = currentValue;
+    }
+  },
+
+  /**
+   * Renders the custom category management UI
+   * Displays custom category list with delete buttons and count
+   */
+  renderCategoryManagement() {
+    // Get custom category list element
+    const listElement = document.getElementById('custom-category-list');
+    
+    if (!listElement) {
+      console.error('Custom category list element not found');
+      return;
+    }
+
+    // Clear existing list
+    listElement.innerHTML = '';
+
+    // Get custom categories
+    const customCategories = CategoryManager.customCategories;
+
+    // Create list items for each custom category
+    customCategories.forEach(category => {
+      const listItem = document.createElement('li');
+      listItem.className = 'custom-category-item';
+
+      // Create category name span
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'custom-category-name';
+      nameSpan.textContent = category;
+
+      // Create delete button
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'btn-delete-category';
+      deleteButton.textContent = 'Delete';
+      deleteButton.setAttribute('aria-label', `Delete ${category} category`);
+      
+      // Add delete button event listener
+      deleteButton.addEventListener('click', () => {
+        const result = CategoryManager.deleteCategory(category);
+        if (result.success) {
+          // Update UI after successful deletion
+          this.renderCategoryManagement();
+          this.renderCategoryOptions();
+          this.updateCategoryCount();
+          // Update chart to reflect changes
+          ChartManager.update(AppState.getCategoryTotals());
+        } else {
+          // Show error message
+          this.showError(result.error);
+        }
+      });
+
+      // Append elements to list item
+      listItem.appendChild(nameSpan);
+      listItem.appendChild(deleteButton);
+
+      // Append list item to list
+      listElement.appendChild(listItem);
+    });
+
+    // Update category count
+    this.updateCategoryCount();
+  },
+
+  /**
+   * Updates the category count display and add button state
+   */
+  updateCategoryCount() {
+    // Get category count element
+    const countElement = document.getElementById('category-count');
+    
+    if (!countElement) {
+      console.error('Category count element not found');
+      return;
+    }
+
+    // Get add category button
+    const addButton = document.getElementById('add-category-btn');
+    
+    if (!addButton) {
+      console.error('Add category button not found');
+      return;
+    }
+
+    // Get current count
+    const count = CategoryManager.customCategories.length;
+    const max = CategoryManager.MAX_CUSTOM_CATEGORIES;
+
+    // Update count display
+    countElement.textContent = `${count}/${max} custom categories`;
+
+    // Disable button if at max, enable otherwise
+    if (count >= max) {
+      addButton.disabled = true;
+      // Show max limit message
+      const errorElement = document.getElementById('error-message');
+      if (errorElement && !errorElement.classList.contains('show')) {
+        this.showError(`Maximum of ${max} custom categories reached`);
+      }
+    } else {
+      addButton.disabled = false;
+    }
   }
 };
 
@@ -782,8 +1237,8 @@ const ChartManager = {
       // Get theme-appropriate colors from ThemeManager
       const themeColors = ThemeManager.getThemeColors();
 
-      // Define distinct colors for each category using theme colors
-      const categoryColors = {
+      // Define distinct colors for default categories using theme colors
+      this.defaultCategoryColors = {
         Food: themeColors.food,
         Transport: themeColors.transport,
         Fun: themeColors.fun
@@ -828,9 +1283,6 @@ const ChartManager = {
           }
         }
       });
-
-      // Store color mapping for updates
-      this.categoryColors = categoryColors;
 
       return true;
     } catch (error) {
@@ -887,7 +1339,7 @@ const ChartManager = {
 
   /**
    * Updates fallback display with category totals (Task 11.2)
-   * @param {Object} categoryTotals - Object with category totals {Food: number, Transport: number, Fun: number}
+   * @param {Object} categoryTotals - Object with category totals for all categories
    */
   updateFallback(categoryTotals) {
     const totalsDiv = document.getElementById('fallback-totals');
@@ -897,13 +1349,6 @@ const ChartManager = {
 
     // Clear existing content
     totalsDiv.innerHTML = '';
-
-    // Define colors for categories
-    const categoryColors = {
-      Food: '#FF6384',
-      Transport: '#36A2EB',
-      Fun: '#FFCE56'
-    };
 
     // Filter and display categories with non-zero spending
     let hasData = false;
@@ -919,13 +1364,13 @@ const ChartManager = {
         colorBox.style.display = 'inline-block';
         colorBox.style.width = '20px';
         colorBox.style.height = '20px';
-        colorBox.style.backgroundColor = categoryColors[category];
+        colorBox.style.backgroundColor = this.getCategoryColor(category);
         colorBox.style.marginRight = '10px';
         colorBox.style.verticalAlign = 'middle';
         colorBox.style.borderRadius = '3px';
 
         const text = document.createElement('span');
-        text.textContent = `${category}: $${total.toFixed(2)}`;
+        text.textContent = `${category}: ${total.toFixed(2)}`;
         text.style.fontWeight = 'bold';
 
         categoryDiv.appendChild(colorBox);
@@ -942,8 +1387,38 @@ const ChartManager = {
   },
 
   /**
+   * Gets the color for a category based on current theme
+   * @param {string} categoryName - Name of the category
+   * @returns {string} Color hex code for the category
+   */
+  getCategoryColor(categoryName) {
+    // Get theme-appropriate colors
+    const themeColors = ThemeManager.getThemeColors();
+    
+    // Check if it's a default category
+    if (this.defaultCategoryColors && this.defaultCategoryColors[categoryName]) {
+      return this.defaultCategoryColors[categoryName];
+    }
+    
+    // For custom categories, generate a distinct color
+    // Use a simple hash function to generate consistent colors
+    let hash = 0;
+    for (let i = 0; i < categoryName.length; i++) {
+      hash = categoryName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Generate HSL color with good saturation and lightness
+    // Adjust lightness based on theme
+    const hue = Math.abs(hash % 360);
+    const saturation = 65;
+    const lightness = ThemeManager.currentTheme === 'dark' ? 65 : 55;
+    
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  },
+
+  /**
    * Updates the chart with new category totals
-   * @param {Object} categoryTotals - Object with category totals {Food: number, Transport: number, Fun: number}
+   * @param {Object} categoryTotals - Object with category totals for all categories
    */
   update(categoryTotals) {
     // Use fallback if in fallback mode (Task 11.2)
@@ -971,7 +1446,7 @@ const ChartManager = {
         if (total > 0) {
           labels.push(category);
           data.push(total);
-          colors.push(this.categoryColors[category]);
+          colors.push(this.getCategoryColor(category));
         }
       });
 
@@ -1001,8 +1476,8 @@ const ChartManager = {
       // Get theme-appropriate colors from ThemeManager
       const themeColors = ThemeManager.getThemeColors();
 
-      // Update category colors mapping
-      this.categoryColors = {
+      // Update default category colors mapping
+      this.defaultCategoryColors = {
         Food: themeColors.food,
         Transport: themeColors.transport,
         Fun: themeColors.fun
@@ -1016,7 +1491,7 @@ const ChartManager = {
       // Update background colors for existing data
       if (this.chartInstance.data.labels && this.chartInstance.data.labels.length > 0) {
         const updatedColors = this.chartInstance.data.labels.map(label => {
-          return this.categoryColors[label] || themeColors.food;
+          return this.getCategoryColor(label);
         });
         this.chartInstance.data.datasets[0].backgroundColor = updatedColors;
       }

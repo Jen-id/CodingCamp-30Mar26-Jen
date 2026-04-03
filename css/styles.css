@@ -323,6 +323,148 @@ body.dark-theme {
 }
 
 /* ===================================
+   Custom Category Management Section
+   =================================== */
+
+.category-management-section {
+    background: var(--color-surface);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-md);
+    box-shadow: var(--shadow-sm);
+    transition: background-color 300ms ease-in-out, color 300ms ease-in-out, border-color 300ms ease-in-out;
+}
+
+.category-management-section h2 {
+    font-size: var(--font-size-xl);
+    margin-bottom: var(--spacing-md);
+    color: var(--color-text-primary);
+}
+
+.category-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.category-add-form .form-group {
+    flex: 1;
+}
+
+.btn-add-category {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: white;
+    background-color: var(--color-success);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+    min-height: 44px;
+}
+
+.btn-add-category:hover:not(:disabled) {
+    background-color: #229954;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-add-category:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-add-category:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.3);
+}
+
+.btn-add-category:disabled {
+    background-color: var(--color-text-secondary);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.category-count {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-sm);
+    font-weight: 600;
+}
+
+.custom-category-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.custom-category-list:empty::after {
+    content: 'No custom categories yet. Add one above!';
+    display: block;
+    padding: var(--spacing-md);
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.custom-category-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm);
+    background-color: var(--color-background);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.custom-category-item:hover {
+    transform: translateX(4px);
+    box-shadow: var(--shadow-sm);
+}
+
+.custom-category-name {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    flex: 1;
+}
+
+.btn-delete-category {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: white;
+    background-color: var(--color-danger);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.btn-delete-category:hover {
+    background-color: #c0392b;
+    transform: scale(1.05);
+}
+
+.btn-delete-category:active {
+    transform: scale(0.95);
+}
+
+.btn-delete-category:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.3);
+}
+
+/* ===================================
    Transaction Section
    =================================== */
 
@@ -538,6 +680,16 @@ body.dark-theme {
     
     .chart-container {
         max-width: 500px;
+    }
+
+    .category-add-form {
+        flex-direction: row;
+        align-items: flex-end;
+    }
+
+    .btn-add-category {
+        width: auto;
+        min-width: 150px;
     }
 }
 

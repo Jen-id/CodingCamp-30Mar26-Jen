@@ -71,9 +71,35 @@
                 </div>
 
                 <button type="submit" class="btn-submit">Add Expense</button>
-                
+
                 <div id="error-message" class="error-message" role="alert" aria-live="assertive"></div>
             </form>
+        </section>
+
+        <!-- Custom Category Management -->
+        <section class="category-management-section" aria-labelledby="category-management-heading">
+            <h2 id="category-management-heading">Manage Categories</h2>
+
+            <div class="category-add-form">
+                <div class="form-group">
+                    <label for="new-category-name">New Category Name</label>
+                    <input
+                        type="text"
+                        id="new-category-name"
+                        name="newCategoryName"
+                        placeholder="Enter category name"
+                        maxlength="20"
+                        aria-describedby="category-count"
+                    >
+                </div>
+                <button type="button" id="add-category-btn" class="btn-add-category">Add Category</button>
+            </div>
+
+            <div id="category-count" class="category-count" aria-live="polite">0/10 custom categories</div>
+
+            <ul id="custom-category-list" class="custom-category-list" aria-live="polite">
+                <!-- Custom categories will be dynamically inserted here -->
+            </ul>
         </section>
 
         <!-- Transaction List -->
